@@ -4,7 +4,7 @@
 > An interactive cost accounting case study built for **UNC Kenan-Flagler Business School**  
 > Demonstrates the **demand-driven death spiral** using real data from Peloton's FY2025 10-K
 
-**[▶ View Live Widget](https://YOUR-USERNAME.github.io/peloton-death-spiral/)**
+**[▶ View Live Widget](https://silaswesner.github.io/peloton-death-spiral/)**
 
 ---
 
