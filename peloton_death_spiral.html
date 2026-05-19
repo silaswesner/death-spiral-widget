@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Peloton Death Spiral — Interactive Widget</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --unc-blue: #4B9CD3;
+      --unc-dark: #13294B;
+      --red: #c0392b;
+      --green: #27ae60;
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --border: #dde3ea;
+      --text: #1a1a2e;
+      --muted: #6b7280;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--unc-dark);
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header .logo-text {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: .5px;
+      color: var(--unc-blue);
+    }
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      border-left: 2px solid var(--unc-blue);
+      padding-left: 16px;
+      margin-left: 4px;
+    }
+
+    /* ── Layout ── */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    /* ── Concept Banner ── */
+    .concept-banner {
+      background: linear-gradient(135deg, #13294B 0%, #1e3f6e 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 22px 28px;
+      margin-bottom: 28px;
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+    }
+    .spiral-icon {
+      font-size: 3rem;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .concept-banner h2 { font-size: 1.1rem; color: var(--unc-blue); margin-bottom: 6px; }
+    .concept-banner p { font-size: .88rem; line-height: 1.6; opacity: .9; }
+    .concept-banner .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .tag {
+      background: rgba(75,156,211,.25);
+      border: 1px solid var(--unc-blue);
+      color: #a8d4f5;
+      font-size: .75rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+
+    /* ── KPI Cards ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .kpi-card.blue::before  { background: var(--unc-blue); }
+    .kpi-card.red::before   { background: var(--red); }
+    .kpi-card.green::before { background: var(--green); }
+    .kpi-card.orange::before { background: #e67e22; }
+    .kpi-label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 4px; }
+    .kpi-value { font-size: 1.5rem; font-weight: 700; }
+    .kpi-delta { font-size: .78rem; margin-top: 4px; }
+    .kpi-delta.down { color: var(--red); }
+    .kpi-delta.up   { color: var(--green); }
+
+    /* ── Section Headers ── */
+    .section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--unc-dark);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Chart Grid ── */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+    .chart-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .chart-card h3 {
+      font-size: .88rem;
+      font-weight: 600;
+      color: var(--unc-dark);
+      margin-bottom: 14px;
+    }
+    .chart-card canvas { max-height: 240px; }
+
+    /* ── Spiral Mechanics ── */
+    .spiral-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 28px;
+    }
+    .spiral-section h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--unc-dark);
+      margin-bottom: 18px;
+    }
+
+    /* ── Spiral Flow Diagram ── */
+    .spiral-flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0;
+      margin-bottom: 24px;
+    }
+    .flow-step {
+      background: #eef4fb;
+      border: 2px solid var(--unc-blue);
+      border-radius: 8px;
+      padding: 10px 14px;
+      text-align: center;
+      font-size: .78rem;
+      font-weight: 600;
+      color: var(--unc-dark);
+      min-width: 130px;
+      max-width: 150px;
+    }
+    .flow-step.danger {
+      background: #fdecea;
+      border-color: var(--red);
+      color: var(--red);
+    }
+    .flow-arrow {
+      font-size: 1.4rem;
+      color: var(--muted);
+      padding: 0 4px;
+    }
+
+    /* ── Interactive Calculator ── */
+    .calc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 640px) { .calc-grid { grid-template-columns: 1fr; } }
+    .calc-inputs label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+      margin-top: 14px;
+    }
+    .calc-inputs label:first-child { margin-top: 0; }
+    .calc-inputs input[type=range] {
+      width: 100%;
+      accent-color: var(--unc-blue);
+    }
+    .range-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: .75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .calc-result {
+      background: #f0f7ff;
+      border: 1px solid #b3d4f0;
+      border-radius: 8px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .85rem;
+    }
+    .result-row .label { color: var(--muted); }
+    .result-row .value { font-weight: 700; font-size: .95rem; }
+    .result-row .value.bad  { color: var(--red); }
+    .result-row .value.good { color: var(--green); }
+    .result-divider { border: none; border-top: 1px solid #cde0f5; }
+    .spiral-verdict {
+      background: #fdecea;
+      border: 1px solid var(--red);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: .82rem;
+      color: var(--red);
+      font-weight: 600;
+      text-align: center;
+      display: none;
+    }
+    .spiral-verdict.show { display: block; }
+    .healthy-verdict {
+      background: #eafaf1;
+      border: 1px solid var(--green);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: .82rem;
+      color: var(--green);
+      font-weight: 600;
+      text-align: center;
+      display: none;
+    }
+    .healthy-verdict.show { display: block; }
+
+    /* ── Data Table ── */
+    .data-table-wrap {
+      overflow-x: auto;
+      margin-bottom: 28px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .82rem;
+    }
+    th {
+      background: var(--unc-dark);
+      color: #fff;
+      padding: 9px 12px;
+      text-align: right;
+      font-weight: 600;
+    }
+    th:first-child { text-align: left; }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: right;
+    }
+    td:first-child { text-align: left; font-weight: 600; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .cell-red   { color: var(--red); font-weight: 700; }
+    .cell-green { color: var(--green); font-weight: 700; }
+    .cell-peak  { background: #fff3cd !important; font-weight: 700; }
+
+    /* ── Insight Box ── */
+    .insight-box {
+      background: linear-gradient(135deg, #fff8e1, #fff3cd);
+      border: 1px solid #f0c040;
+      border-left: 4px solid #f0c040;
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-size: .85rem;
+      line-height: 1.7;
+      margin-bottom: 28px;
+    }
+    .insight-box strong { color: var(--unc-dark); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      font-size: .75rem;
+      color: var(--muted);
+      padding: 20px;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-text">🎓 UNC | KENAN-FLAGLER</div>
+  <h1>The Death Spiral — Peloton Case Study</h1>
+</header>
+
+<main>
+
+  <!-- ── Concept Banner ── -->
+  <div class="concept-banner">
+    <div class="spiral-icon">🌀</div>
+    <div>
+      <h2>What is the Death Spiral?</h2>
+      <p>
+        Fixed costs remain constant regardless of volume. As output (subscribers/units) <strong>decreases</strong>,
+        fixed costs must be spread over <em>fewer</em> units — raising the average cost per unit.
+        Higher unit costs reduce competitiveness, driving further volume loss, which raises costs again.
+        This self-reinforcing cycle is the <strong>death spiral</strong>.
+      </p>
+      <div class="tags">
+        <span class="tag">Demand-Driven</span>
+        <span class="tag">Fixed Cost Allocation</span>
+        <span class="tag">Real Peloton Data (FY2020–FY2024)</span>
+        <span class="tag">Interactive</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── KPI Cards ── -->
+  <div class="section-title">📊 Peloton at a Glance (Peak vs. Now)</div>
+  <div class="kpi-grid">
+    <div class="kpi-card blue">
+      <div class="kpi-label">Peak Revenue (FY2021)</div>
+      <div class="kpi-value">$4.02B</div>
+      <div class="kpi-delta down">▼ 38% to FY2024 ($2.70B)</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Peak Connected Subs (Mar 2022)</div>
+      <div class="kpi-value">2.96M</div>
+      <div class="kpi-delta down">▼ 10% to Dec 2024 (2.66M)</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Worst Net Loss (FY2022)</div>
+      <div class="kpi-value">−$2.83B</div>
+      <div class="kpi-delta up">▲ Improving: −$119M (FY2025)</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-label">Operating Expenses (FY2022)</div>
+      <div class="kpi-value">$3.43B</div>
+      <div class="kpi-delta down">Fixed base vs. shrinking revenue</div>
+    </div>
+  </div>
+
+  <!-- ── Spiral Flow ── -->
+  <div class="spiral-section">
+    <h3>🔄 Peloton's Demand-Driven Death Spiral</h3>
+    <div class="spiral-flow">
+      <div class="flow-step">COVID Boom<br/><small>2020–2021</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Demand Collapses<br/><small>Post-pandemic</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step danger">Subscribers Fall<br/><small>Revenue drops</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step danger">Fixed Costs / Sub ↑<br/><small>Overhead spreads thin</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step danger">Losses Mount<br/><small>−$2.83B FY2022</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step danger">Price Hikes &amp; Cuts<br/><small>Further churn risk</small></div>
+    </div>
+    <p style="font-size:.82rem;color:var(--muted);text-align:center;">
+      Peloton built massive fixed infrastructure (studios, instructors, logistics) for 3M+ subscribers.
+      When demand fell, those fixed costs couldn't shrink — creating the classic death spiral dynamic.
+    </p>
+  </div>
+
+  <!-- ── Charts ── -->
+  <div class="section-title">📈 Historical Trends (FY2020–FY2024)</div>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Annual Revenue ($B) — Peak to Decline</h3>
+      <canvas id="revenueChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Connected Fitness Subscribers (M)</h3>
+      <canvas id="subsChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Net Income ($B) — The Losses</h3>
+      <canvas id="netIncomeChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Fixed Cost per Subscriber (Est. $)</h3>
+      <canvas id="fcPerSubChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Data Table ── -->
+  <div class="section-title">📋 Annual Financial Summary (Source: Peloton 10-K Filings)</div>
+  <div class="data-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Fiscal Year</th>
+          <th>Revenue</th>
+          <th>Cost of Revenue</th>
+          <th>Gross Profit</th>
+          <th>Operating Expenses</th>
+          <th>Net Income</th>
+          <th>Conn. Fitness Subs (EOP)</th>
+          <th>Est. Fixed Cost / Sub</th>
+        </tr>
+      </thead>
+      <tbody id="dataTableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- ── Insight Box ── -->
+  <div class="insight-box">
+    <strong>💡 The Death Spiral in Numbers:</strong> In FY2021, Peloton had ~2.33M connected fitness subscribers and
+    $4.02B in revenue — roughly <strong>$1,726 revenue per subscriber</strong>.
+    By FY2024, revenue fell to $2.70B while subscribers declined to ~2.98M (end of FY2024).
+    But fixed operating infrastructure — studios, content production, logistics, G&amp;A — couldn't scale down proportionally.
+    Estimated fixed costs per subscriber <strong>rose sharply</strong> after the peak, compressing margins and forcing painful restructuring.
+    This is the textbook demand-driven death spiral from your slides.
+  </div>
+
+  <!-- ── Interactive Calculator ── -->
+  <div class="spiral-section">
+    <h3>🧮 Interactive Death Spiral Calculator — Simulate Peloton's Economics</h3>
+    <div class="calc-grid">
+      <div class="calc-inputs">
+        <label>📌 Annual Fixed Costs ($M)
+          <span id="fcLabel" style="color:var(--unc-blue);font-weight:700;float:right"></span>
+        </label>
+        <input type="range" id="fcSlider" min="500" max="3500" step="50" value="1740" oninput="updateCalc()">
+        <div class="range-row"><span>$500M</span><span>$3,500M</span></div>
+
+        <label>👥 Connected Fitness Subscribers (M)
+          <span id="subsLabel" style="color:var(--unc-blue);font-weight:700;float:right"></span>
+        </label>
+        <input type="range" id="subsSlider" min="0.5" max="3.5" step="0.05" value="2.98" oninput="updateCalc()">
+        <div class="range-row"><span>0.5M</span><span>3.5M</span></div>
+
+        <label>💵 Monthly Subscription Price ($)
+          <span id="priceLabel" style="color:var(--unc-blue);font-weight:700;float:right"></span>
+        </label>
+        <input type="range" id="priceSlider" min="20" max="60" step="1" value="44" oninput="updateCalc()">
+        <div class="range-row"><span>$20</span><span>$60</span></div>
+
+        <label>🔧 Variable Cost per Sub / Year ($)
+          <span id="vcLabel" style="color:var(--unc-blue);font-weight:700;float:right"></span>
+        </label>
+        <input type="range" id="vcSlider" min="50" max="400" step="10" value="180" oninput="updateCalc()">
+        <div class="range-row"><span>$50</span><span>$400</span></div>
+      </div>
+
+      <div>
+        <div class="calc-result" id="calcResult">
+          <div class="result-row">
+            <span class="label">Annual Subscription Revenue</span>
+            <span class="value" id="r_rev">—</span>
+          </div>
+          <hr class="result-divider">
+          <div class="result-row">
+            <span class="label">Total Variable Costs</span>
+            <span class="value bad" id="r_vc">—</span>
+          </div>
+          <div class="result-row">
+            <span class="label">Total Fixed Costs</span>
+            <span class="value bad" id="r_fc">—</span>
+          </div>
+          <hr class="result-divider">
+          <div class="result-row">
+            <span class="label">Operating Profit / Loss</span>
+            <span class="value" id="r_profit">—</span>
+          </div>
+          <hr class="result-divider">
+          <div class="result-row">
+            <span class="label">Fixed Cost per Subscriber</span>
+            <span class="value" id="r_fcps">—</span>
+          </div>
+          <div class="result-row">
+            <span class="label">Revenue per Subscriber</span>
+            <span class="value" id="r_rps">—</span>
+          </div>
+          <div class="result-row">
+            <span class="label">Contribution Margin / Sub</span>
+            <span class="value" id="r_cm">—</span>
+          </div>
+          <hr class="result-divider">
+          <div class="result-row">
+            <span class="label">Break-Even Subscribers</span>
+            <span class="value" id="r_be">—</span>
+          </div>
+        </div>
+        <div class="spiral-verdict" id="spiralVerdict">
+          ⚠️ DEATH SPIRAL RISK: Fixed costs per subscriber exceed contribution margin.
+          Each subscriber lost makes the problem worse.
+        </div>
+        <div class="healthy-verdict" id="healthyVerdict">
+          ✅ HEALTHY: Contribution margin covers fixed costs. Profitable at current scale.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Practical Capacity Note ── -->
+  <div class="insight-box" style="background:linear-gradient(135deg,#e8f4f8,#d0eaf7);border-color:#4B9CD3;border-left-color:#13294B;">
+    <strong>🎓 Practical Capacity Rate — The Escape Hatch:</strong>
+    As your slides note, using a <em>practical capacity overhead rate</em> (based on maximum attainable volume)
+    rather than actual volume can break the spiral. If Peloton had set its subscription pricing based on
+    <strong>3M+ subscriber capacity</strong> rather than actual subscribers, it would have isolated the
+    "unused capacity cost" as a separate line item — making the real problem visible to management
+    rather than letting it inflate per-unit costs and trigger further price hikes and churn.
+  </div>
+
+</main>
+
+<footer>
+  Data sources: Peloton 10-K Annual Reports (FY2020–FY2024) · Backlinko Peloton Statistics (2026) ·
+  MarketCap.ru Financial Statements · Concept framework: UNC Kenan-Flagler Business School
+</footer>
+
+<script>
+  // ── Real Peloton Annual Data (Fiscal Year ending June 30) ──
+  const data = [
+    { fy: 'FY2020', rev: 1826, cogs: 989, opex: 918, net: -71.6, subs: 1.09, label: 'FY2020' },
+    { fy: 'FY2021', rev: 4021, cogs: 2566, opex: 1641, net: -189,  subs: 2.33, label: 'FY2021 ⭐ Peak' },
+    { fy: 'FY2022', rev: 3582, cogs: 2880, opex: 3430, net: -2828, subs: 2.96, label: 'FY2022' },
+    { fy: 'FY2023', rev: 2800, cogs: 1880, opex: 2120, net: -1260, subs: 3.08, label: 'FY2023' },
+    { fy: 'FY2024', rev: 2700, cogs: 1490, opex: 1740, net: -552,  subs: 2.98, label: 'FY2024' },
+  ];
+
+  // Estimated fixed costs = opex (SG&A + R&D, largely fixed)
+  // Est. fixed cost per subscriber = opex / subs (in $)
+  const fcPerSub = data.map(d => Math.round((d.opex / d.subs) * 1000 / 1000));
+
+  // ── Populate Table ──
+  const tbody = document.getElementById('dataTableBody');
+  data.forEach((d, i) => {
+    const isPeak = d.fy === 'FY2021';
+    const fcps = Math.round((d.opex * 1e6) / (d.subs * 1e6));
+    tbody.innerHTML += `
+      <tr>
+        <td class="${isPeak ? 'cell-peak' : ''}">${d.label}</td>
+        <td class="${isPeak ? 'cell-peak' : ''}">$${d.rev.toLocaleString()}M</td>
+        <td>$${d.cogs.toLocaleString()}M</td>
+        <td class="${(d.rev - d.cogs) > 0 ? 'cell-green' : 'cell-red'}">$${(d.rev - d.cogs).toLocaleString()}M</td>
+        <td>$${d.opex.toLocaleString()}M</td>
+        <td class="${d.net < 0 ? 'cell-red' : 'cell-green'}">$${d.net.toLocaleString()}M</td>
+        <td>${d.subs.toFixed(2)}M</td>
+        <td class="${fcps > 500 ? 'cell-red' : 'cell-green'}">$${fcps.toLocaleString()}</td>
+      </tr>`;
+  });
+
+  // ── Chart Defaults ──
+  Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+  Chart.defaults.font.size = 11;
+  const labels = data.map(d => d.fy);
+
+  // Revenue Chart
+  new Chart(document.getElementById('revenueChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Revenue ($B)',
+        data: data.map(d => (d.rev / 1000).toFixed(2)),
+        backgroundColor: data.map(d => d.fy === 'FY2021' ? '#4B9CD3' : '#a8c8e8'),
+        borderRadius: 5,
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => '$' + v + 'B' } }
+      }
+    }
+  });
+
+  // Subscribers Chart
+  new Chart(document.getElementById('subsChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Connected Fitness Subs (M)',
+        data: data.map(d => d.subs),
+        borderColor: '#4B9CD3',
+        backgroundColor: 'rgba(75,156,211,.12)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointBackgroundColor: data.map(d => d.subs === Math.max(...data.map(x => x.subs)) ? '#c0392b' : '#4B9CD3'),
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: false, ticks: { callback: v => v + 'M' } }
+      }
+    }
+  });
+
+  // Net Income Chart
+  new Chart(document.getElementById('netIncomeChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Net Income ($B)',
+        data: data.map(d => (d.net / 1000).toFixed(2)),
+        backgroundColor: data.map(d => d.net < 0 ? 'rgba(192,57,43,.75)' : 'rgba(39,174,96,.75)'),
+        borderRadius: 5,
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { callback: v => '$' + v + 'B' } }
+      }
+    }
+  });
+
+  // Fixed Cost per Sub Chart
+  new Chart(document.getElementById('fcPerSubChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Est. Fixed Cost / Sub ($)',
+        data: data.map(d => Math.round((d.opex * 1e6) / (d.subs * 1e6))),
+        borderColor: '#c0392b',
+        backgroundColor: 'rgba(192,57,43,.10)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointBackgroundColor: '#c0392b',
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => '$' + ctx.raw.toLocaleString() } }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => '$' + v.toLocaleString() } }
+      }
+    }
+  });
+
+  // ── Interactive Calculator ──
+  function fmt(n, prefix='$', suffix='') {
+    return prefix + Math.abs(n).toLocaleString(undefined, {maximumFractionDigits:0}) + suffix;
+  }
+
+  function updateCalc() {
+    const fc    = +document.getElementById('fcSlider').value;
+    const subs  = +document.getElementById('subsSlider').value;
+    const price = +document.getElementById('priceSlider').value;
+    const vc    = +document.getElementById('vcSlider').value;
+
+    document.getElementById('fcLabel').textContent    = '$' + fc + 'M';
+    document.getElementById('subsLabel').textContent  = subs.toFixed(2) + 'M';
+    document.getElementById('priceLabel').textContent = '$' + price + '/mo';
+    document.getElementById('vcLabel').textContent    = '$' + vc + '/yr';
+
+    const revM    = subs * price * 12;          // $M
+    const vcM     = subs * vc;                  // $M
+    const fcM     = fc;
+    const profitM = revM - vcM - fcM;
+    const fcps    = Math.round((fcM * 1e6) / (subs * 1e6));
+    const rps     = Math.round(price * 12);
+    const cm      = rps - vc;                   // per sub
+    const beM     = cm > 0 ? (fcM * 1e6) / cm / 1e6 : Infinity;
+
+    document.getElementById('r_rev').textContent    = '$' + revM.toFixed(0) + 'M';
+    document.getElementById('r_vc').textContent     = '−$' + vcM.toFixed(0) + 'M';
+    document.getElementById('r_fc').textContent     = '−$' + fcM + 'M';
+
+    const profitEl = document.getElementById('r_profit');
+    profitEl.textContent = (profitM >= 0 ? '+' : '−') + '$' + Math.abs(profitM).toFixed(0) + 'M';
+    profitEl.className   = 'value ' + (profitM >= 0 ? 'good' : 'bad');
+
+    document.getElementById('r_fcps').textContent = '$' + fcps.toLocaleString() + '/sub/yr';
+    document.getElementById('r_rps').textContent  = '$' + rps.toLocaleString() + '/sub/yr';
+
+    const cmEl = document.getElementById('r_cm');
+    cmEl.textContent = (cm >= 0 ? '+' : '−') + '$' + Math.abs(cm).toLocaleString() + '/sub/yr';
+    cmEl.className   = 'value ' + (cm >= 0 ? 'good' : 'bad');
+
+    document.getElementById('r_be').textContent =
+      cm > 0 ? beM.toFixed(2) + 'M subs' : '∞ (CM ≤ 0)';
+
+    const inSpiral = profitM < 0 && cm < fcps;
+    document.getElementById('spiralVerdict').className  = 'spiral-verdict'  + (inSpiral ? ' show' : '');
+    document.getElementById('healthyVerdict').className = 'healthy-verdict' + (!inSpiral && profitM >= 0 ? ' show' : '');
+  }
+
+  updateCalc();
+</script>
+</body>
+</html>
